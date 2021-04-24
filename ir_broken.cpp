@@ -17,6 +17,18 @@
 #include <events/mbed_events.h>
 #include "ble/BLE.h"
 #include "gatt_server_process.h"
+#include "PinNames.h"
+
+DigitalOut lservo(p24);
+DigitalOut rservo(p25);
+bool usr;
+
+
+
+DigitalIn IR_left(p21);
+DigitalIn IR_middle(p1);
+DigitalIn IR_right(p0);
+Ticker IR_sensors;
 
 static EventQueue event_queue(/* event count */ 10 * EVENTS_EVENT_SIZE);
 
@@ -40,6 +52,8 @@ public:
     {
     }
 
+
+
     void start(BLE &ble, events::EventQueue &event_queue)
     {
         const UUID uuid = EXAMPLE_SERVICE_UUID;
@@ -62,9 +76,38 @@ private:
      */
     virtual void onDataWritten(const GattWriteCallbackParams &params)
     {
-        if ((params.handle == _writable_characteristic->getValueHandle()) && (params.len == 1)) {
-            printf("New characteristic value written: %x\r\n", *(params.data));
+        int value = *(params.data);
+        printf("Value written: %d \n", value);
+        if (value / 4 & 1) {
+            usr = true;
+        } else if (value / 8 & 1) {
+            usr = false;
         }
+        if (usr) {
+            switch(value & 3) {
+                case 0 : 
+                    lservo = 0;
+                    rservo = 0;
+                    break;
+                case 1 : 
+                    lservo = 0;
+                    rservo = 1;
+                    break;
+                case 2 : 
+                    lservo = 1;
+                    rservo = 0;
+                    break;
+                case 3 : 
+                    lservo = 1;
+                    rservo = 1;
+                    break;
+                default : 
+                    lservo = 0;
+                    rservo = 0;
+                    break;
+            }
+        }
+
     }
 
 private:
@@ -72,8 +115,50 @@ private:
     uint8_t _characteristic_value = 0;
 };
 
+void IR_sensing(){
+    if (usr) {
+        return;
+    }
+        if(IR_left == 1 && IR_middle == 1 && IR_right == 1){
+            lservo = 1;
+            rservo = 1;
+        }
+        else if(IR_left == 1 && IR_middle == 1 && IR_right == 0){
+            lservo = 0;
+            rservo = 1;
+        }
+        else if(IR_left == 1 && IR_middle == 0 && IR_right == 1){
+            lservo = 0;
+            rservo = 1;
+        }
+        else if(IR_left == 1 && IR_middle == 0 && IR_right == 0){
+            lservo = 0;
+            rservo = 1;
+        }
+        else if(IR_left == 0 && IR_middle == 1 && IR_right == 1){
+            lservo = 1;
+            rservo = 0;
+        }
+        else if(IR_left == 0 && IR_middle == 1 && IR_right == 0){
+            lservo = 1;
+            rservo = 0;
+        }
+        else if(IR_left == 0 && IR_middle == 0 && IR_right == 1){
+            lservo = 1;
+            rservo = 0;
+        }
+        else if(IR_left == 0 && IR_middle == 0 && IR_right == 0){
+            lservo = 0;
+            rservo = 1;
+        }
+    }
+
 int main()
 {
+    lservo = 0;
+    rservo = 0;
+    usr = false;
+    IR_sensors.attach(&IR_sensing, 2ms);
     BLE &ble = BLE::Instance();
 
     printf("\r\nGattServer demo of a writable characteristic\r\n");
